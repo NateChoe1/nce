@@ -32,5 +32,7 @@ void freeprogram(struct Program *program);
 Address *searchprogram(struct Program *program, int *lenret,
 		void *needle, size_t needlelen);
 int setaddr(struct Program *program, Address addr, void *data, size_t len);
+int stillgood(struct Program *program, Address addr, void *data, size_t len);
+/* Checks if the memory at address addr still matches data. */
 
 #endif

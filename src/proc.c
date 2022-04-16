@@ -129,10 +129,29 @@ error:
 }
 
 int setaddr(struct Program *program, Address addr, void *data, size_t len) {
-	if (lseek(program->memfd, addr, SEEK_SET) == -1)
+	if (lseek(program->memfd, addr, SEEK_SET) < 0)
 		return 1;
 	if (write(program->memfd, data, len) < len)
 		return 1;
+	return 0;
+}
+
+int stillgood(struct Program *program, Address addr, void *data, size_t len) {
+	void *scratch;
+	if (lseek(program->memfd, addr, SEEK_SET) < 0)
+		return 0;
+	scratch = malloc(len);
+	if (scratch == NULL)
+		return 0;
+	if (read(program->memfd, scratch, len) < len) {
+		free(scratch);
+		return 0;
+	}
+	if (memcmp(scratch, data, len) == 0) {
+		free(scratch);
+		return 1;
+	}
+	free(scratch);
 	return 0;
 }
 
