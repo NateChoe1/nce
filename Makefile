@@ -2,8 +2,8 @@ SRC = $(wildcard src/*.c)
 OBJ = $(subst .c,.o,$(subst src,work,$(SRC)))
 LDFLAGS =
 CFLAGS := -O2 -pipe -Wall -Wpedantic -Wshadow -ansi
-CFLAGS += -Isrc/
-INSTALLDIR := /usr/sbin/
+CFLAGS += -Isrc/include/
+INSTALLDIR := /usr/bin/
 OUT = nce
 
 build/$(OUT): $(OBJ)

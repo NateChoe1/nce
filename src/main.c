@@ -28,6 +28,7 @@
 static int search(pid_t pid, int argc, char **argv);
 static int prune(pid_t pid, int argc, char **argv);
 static int set(pid_t pid, int argc, char **argv);
+static int printlegal(pid_t pid, int argc, char **argv);
 
 static int parsedata(char *data, void **dataret, size_t *datalen);
 
@@ -39,6 +40,7 @@ struct {
 	COMMAND(search)
 	COMMAND(prune)
 	COMMAND(set)
+	COMMAND(printlegal);
 };
 /* It's beautiful. I love it. */
 
@@ -213,6 +215,15 @@ static int set(pid_t pid, int argc, char **argv) {
 					addrs[i]);
 		}
 	}
+	return 0;
+}
+
+static int printlegal(pid_t pid, int argc, char **argv) {
+	puts("nce - a program to change memory values of linux programs");
+	puts("This program is free software, you can redistribute it and/or");
+	puts("modify it under the terms of the GNU General Public License as");
+	puts("published by the Free Software Foundation, either version 3 of");
+	puts("the Licnese, or (at your option) any later version.");
 	return 0;
 }
 
