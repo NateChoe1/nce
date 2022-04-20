@@ -25,10 +25,11 @@
 #include <nce/proc.h>
 #include <nce/util.h>
 
-
 static int search(pid_t pid, int argc, char **argv);
 static int prune(pid_t pid, int argc, char **argv);
 static int set(pid_t pid, int argc, char **argv);
+
+static int parsedata(char *data, void **dataret, size_t *datalen);
 
 #define COMMAND(name) {#name, name},
 struct {
@@ -42,10 +43,10 @@ struct {
 /* It's beautiful. I love it. */
 
 int main(int argc, char **argv) {
-	pid_t pid;
 	int i;
+	pid_t pid;
 
-	if (argc < 3) {
+	if (argc < 2) {
 		fprintf(stderr, "Usage: %s [pid] [command]\n", argv[0]);
 		fputs("List of valid commands:\n"
 			"search\n"
@@ -60,7 +61,7 @@ int main(int argc, char **argv) {
 		if (strcmp(argv[2], commands[i].name) == 0)
 			return commands[i].function(pid, argc - 2, argv + 2);
 	}
-	fprintf(stderr, "Invalid command %s\n", argv[2]);
+	fprintf(stderr, "Invalid command %s\n", argv[1]);
 	return 1;
 }
 
@@ -68,7 +69,8 @@ static int search(pid_t pid, int argc, char **argv) {
 	Address *addrs;
 	int addrslen;
 	struct Program *program;
-	int needle;
+	void *needle;
+	size_t needlelen;
 	int i;
 	FILE *scratch;
 
@@ -81,14 +83,15 @@ static int search(pid_t pid, int argc, char **argv) {
 	else
 		scratch = NULL;
 
-	needle = atoi(argv[1]);
+	if (parsedata(argv[1], &needle, &needlelen))
+		return 1;
 
 	program = newprogram(pid);
 	if (program == NULL) {
 		fprintf(stderr, "Couldn't create program\n");
 		return 1;
 	}
-	addrs = searchprogram(program, &addrslen, &needle, sizeof needle);
+	addrs = searchprogram(program, &addrslen, needle, needlelen);
 
 	for (i = 0; i < addrslen; ++i) {
 		printf("%lx\n", addrs[i]);
@@ -105,7 +108,8 @@ static int prune(pid_t pid, int argc, char **argv) {
 	struct Program *program;
 	Address *addrs;
 	int addrslen;
-	int needle;
+	void *needle;
+	size_t needlelen;
 	int i;
 	FILE *infile, *outfile;
 	/*
@@ -120,17 +124,19 @@ static int prune(pid_t pid, int argc, char **argv) {
 		return 1;
 	}
 
-	needle = atoi(argv[1]);
+	if (parsedata(argv[1], &needle, &needlelen))
+		return 1;
 
-	if (argc >= 3)
+	if (argc >= 3) {
 		infile = fopen(argv[2], "r");
+		if (infile == NULL) {
+			fprintf(stderr, "Couldn't open file %s for reading\n",
+					argv[2]);
+			return 1;
+		}
+	}
 	else
 		infile = stdin;
-
-	if (infile == NULL) {
-		fprintf(stderr, "Couldn't open file for reading\n");
-		return 1;
-	}
 
 	program = newprogram(pid);
 
@@ -150,7 +156,7 @@ static int prune(pid_t pid, int argc, char **argv) {
 		outfile = NULL;
 
 	for (i = 0; i < addrslen; ++i) {
-		if (stillgood(program, addrs[i], &needle, sizeof needle)) {
+		if (stillgood(program, addrs[i], needle, needlelen)) {
 			if (outfile != NULL)
 				fprintf(outfile, "%lx\n", addrs[i]);
 			printf("%lx\n", addrs[i]);
@@ -168,7 +174,8 @@ static int set(pid_t pid, int argc, char **argv) {
 	Address *addrs;
 	int addrslen;
 	int i;
-	int newval;
+	void *newval;
+	size_t newvallen;
 	FILE *scratch;
 	struct Program *program;
 
@@ -184,7 +191,8 @@ static int set(pid_t pid, int argc, char **argv) {
 		return 1;
 	}
 
-	newval = atoi(argv[1]);
+	if (parsedata(argv[1], &newval, &newvallen))
+		return 1;
 
 	if (argc >= 3) {
 		scratch = fopen(argv[2], "r");
@@ -200,10 +208,36 @@ static int set(pid_t pid, int argc, char **argv) {
 	addrs = parseaddrs(scratch, &addrslen);
 
 	for (i = 0; i < addrslen; ++i) {
-		if (setaddr(program, addrs[i], &newval, sizeof newval)) {
+		if (setaddr(program, addrs[i], newval, newvallen)) {
 			fprintf(stderr, "Failed to set memory address %lx\n",
 					addrs[i]);
 		}
 	}
 	return 0;
+}
+
+static int parsedata(char *data, void **dataret, size_t *datalen) {
+#define NUM_TYPE(func, c, type) \
+	case c: \
+		*dataret = malloc(sizeof(type)); \
+		* ((type *) *dataret) = func(data + 1); \
+		* datalen = sizeof(type); \
+		return 0;
+	switch (data[0]) {
+	NUM_TYPE(atoi, 'b', unsigned char)  /* byte */
+	NUM_TYPE(atoi, 'w', unsigned short) /* word */
+	NUM_TYPE(atoi, 'l', unsigned int)   /* long */
+	NUM_TYPE(atoi, 'q', unsigned long)  /* quad */
+	NUM_TYPE(atof, 'f', float)          /* float */
+	NUM_TYPE(atof, 'd', double)         /* double */
+	case 's': {
+		size_t len = strlen(data);	
+		*dataret = malloc(len);
+		memcpy(*dataret, data + 1, len);
+		*datalen = len;
+		return 0;
+	}
+	default:
+		return 1;
+	}
 }
